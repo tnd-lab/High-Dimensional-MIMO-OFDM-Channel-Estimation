@@ -1,0 +1,12 @@
+sionna==0.19.2
+tensorflow-macos
+python-dotenv
+tqdm
+scikit-learn
+isort
+black
+flake8
+
+torch
+torchvision
+torchsummary
