@@ -6,6 +6,7 @@ from sionna.channel import (
     cir_to_time_channel,
     subcarrier_frequencies,
     time_lag_discrete_time_channel,
+    time_to_ofdm_channel,
 )
 from sionna.utils import ebnodb2no
 from src.settings.config import (
@@ -23,7 +24,7 @@ from src.settings.config import (
 )
 from src.ofdm.ofdm_resource_grids import rg
 import random
-
+import numpy as np
 
 # Noises on the channel
 no = ebnodb2no(ebno_db, bits_per_symbol, code_rate, rg)
@@ -31,7 +32,7 @@ l_min, l_max = time_lag_discrete_time_channel(bandwidth)
 l_tot = l_max - l_min + 1
 num_time_steps = num_ofdm_symbols * (num_subcarrier + cyclic_prefix_length) + l_tot - 1
 
-default_scene_template = "Blender/maps/polymtl_1/polymtl.xml"
+default_scene_template = "/Users/rysheng/Blender/maps/polymtl_1/polymtl.xml"
 default_ut_loc = [-28.7637, -79.456, 1.359615]
 default_bs_loc = [33.0255, 26.4153, 13.7488]
 default_ut_angle = [math.pi / 3, -math.pi / 9, 0]
@@ -105,10 +106,11 @@ def rt_channel_freq(
         ut_loc=ut_loc,
         bs_loc=bs_loc,
     )
-    paths = scene.compute_paths()
+    paths = scene.compute_paths(los=False)
+    
     paths.apply_doppler(
-        sampling_frequency=subcarrier_spacing,  # Set to 15e3 Hz
-        num_time_steps=num_time_steps,  # Number of OFDM symbols
+        sampling_frequency=subcarrier_spacing,
+        num_time_steps=num_ofdm_symbols,
         tx_velocities=[
             speed / math.sqrt(2),
             speed / math.sqrt(2),
@@ -118,14 +120,13 @@ def rt_channel_freq(
     )  # Or rx speeds
     a, tau = paths.cir(los=False)
 
-    # Compute the channel gain and delays on frequency domain
-    complex_gain_freq = a[
-        ..., cyclic_prefix_length : -1 : (num_subcarrier + cyclic_prefix_length)
-    ]
-    complex_gain_freq = complex_gain_freq[..., :num_ofdm_symbols]
+    mask = tf.squeeze(tau > 0, axis=[0, 1, 2])
+    tau = tf.boolean_mask(tau, mask, axis=3)
+    a = tf.boolean_mask(a, mask, axis=5)
+    
     frequencies = subcarrier_frequencies(num_subcarrier, subcarrier_spacing)
 
-    h_freq = cir_to_ofdm_channel(frequencies, complex_gain_freq, tau, normalize=True)
+    h_freq = cir_to_ofdm_channel(frequencies, a, tau, normalize=True)
     return h_freq
 
 
@@ -143,10 +144,10 @@ def rt_channel_time(
         ut_loc=ut_loc,
         bs_loc=bs_loc,
     )
-    paths = scene.compute_paths()
+    paths = scene.compute_paths(los=False)
     paths.apply_doppler(
-        sampling_frequency=subcarrier_spacing,  # Set to 15e3 Hz
-        num_time_steps=num_time_steps,  # Number of OFDM symbols
+        sampling_frequency=bandwidth,
+        num_time_steps=num_time_steps,
         tx_velocities=[
             speed / math.sqrt(2),
             speed / math.sqrt(2),
@@ -155,9 +156,13 @@ def rt_channel_time(
         rx_velocities=[0, 0, 0],
     )  # Or rx speeds
     a, tau = paths.cir(los=False)
+    
+    mask = tf.squeeze(tau > 0, axis=[0, 1, 2])
+    tau = tf.boolean_mask(tau, mask, axis=3)
+    a = tf.boolean_mask(a, mask, axis=5)
 
-    h_freq = cir_to_time_channel(bandwidth, a, tau, l_min, l_max, normalize=True)
-    return h_freq
+    h_time = cir_to_time_channel(bandwidth, a, tau, l_min, l_max, normalize=True)
+    return h_time
 
 
 def sampling_rt_channel_freq():
@@ -188,8 +193,43 @@ def sampling_rt_channel_time():
 
 if __name__ == "__main__":
     from src.utils.plots import plot_channel_frequency_domain
-
-    h_freq = sampling_rt_channel_freq()
+    from sionna.channel import gen_single_sector_topology
+    from sionna.channel.tr38901 import AntennaArray, UMi
+    from src.settings.antenna import ut_array, bs_array, carrier_frequency
+    import matplotlib.pyplot as plt
+    
+    h_freq = rt_channel_freq()
     plot_channel_frequency_domain(
-        h_freq[0, 0, 0, 0, 0].numpy().real.T,
+        h_freq[0, 0, 0, 0, 0].numpy().real,
     )
+
+    topology = gen_single_sector_topology(1, 1, "umi", min_ut_velocity=speed)
+    ut_loc, bs_loc, ut_orientations, bs_orientations, ut_velocities, in_state = topology
+
+    umi = UMi(
+        carrier_frequency=carrier_frequency,
+        o2i_model="low",
+        ut_array=ut_array,
+        bs_array=bs_array,
+        direction="uplink",
+        enable_shadow_fading=False,
+        enable_pathloss=False,
+    )
+    umi.set_topology(
+        tf.constant([[default_ut_loc]], dtype=tf.float32),
+        tf.constant([[default_bs_loc]], dtype=tf.float32),
+        tf.constant([[default_ut_angle]], dtype=tf.float32),
+        tf.constant([[default_bs_angle]], dtype=tf.float32),
+        tf.constant(
+            [[[speed / math.sqrt(2), speed / math.sqrt(2), 0]]], dtype=tf.float32
+        ),
+        in_state=tf.constant([[False]], dtype=tf.bool),
+        los=False,
+    )
+    umi.show_topology()
+    plt.show()
+
+    ut_array.show()
+    plt.show()
+    bs_array.show()
+    plt.show()
