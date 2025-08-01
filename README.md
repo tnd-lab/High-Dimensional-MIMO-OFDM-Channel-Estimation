@@ -58,7 +58,7 @@ The evaluation metrics are measured at
 <h1 id="notebook">Notebooks</h1>
 
 - `notebooks/statistic_gbsm.ipynb`: statistic the geometric characteristics of CDL channel model.
-- `notebooks/statistic_gbsm.ipynb`: statistic the OFDM transmission pipeline and evaluation results
+- `notebooks/statistic_pipeline.ipynb`: statistic the OFDM transmission pipeline and visualize evaluation results
 - `notebooks/data.ipynb`: visualize the data information
 
 
