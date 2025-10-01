@@ -2,6 +2,8 @@
 
 _This work is currently under review for publication in the IEEE Transactions on Green Communications and Networking_
 
+## PDF
+- [Manuscript](./Nguyen_Do_High-Dimensional-MIMO-OFDM-Channel-Estimation.pdf)
 
 # Pipelines
 ![\[pipelin\]](images/pipeline.png)
