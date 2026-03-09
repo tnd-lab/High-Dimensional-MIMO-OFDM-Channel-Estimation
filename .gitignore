@@ -1,6 +1,6 @@
-# data*/
-# results*/
-# eval*/
+data*/
+results*/
+eval*/
 .env
 .DS_Store
 *.pyc
