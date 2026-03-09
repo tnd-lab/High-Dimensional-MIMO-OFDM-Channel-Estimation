@@ -1,5 +1,5 @@
 from sionna.mimo import StreamManagement
-from sionna.ofdm import LMMSEEqualizer
+from sionna.ofdm import LMMSEEqualizer, MFEqualizer, ZFEqualizer
 
 from src.channels.cdl_channel import no
 from src.ofdm.ofdm_resource_grids import rg
@@ -9,6 +9,22 @@ from src.settings.config import num_streams_per_tx, rx_tx_association
 def lmmse_equalizer(response_symbols, h_est, err_var):
     sm = StreamManagement(rx_tx_association, num_streams_per_tx)
     lmmse_equal = LMMSEEqualizer(rg, sm)
+
+    symbols_hat, no_eff = lmmse_equal([response_symbols, h_est, err_var, no])
+    return symbols_hat, no_eff
+
+
+def mf_equalizer(response_symbols, h_est, err_var):
+    sm = StreamManagement(rx_tx_association, num_streams_per_tx)
+    lmmse_equal = MFEqualizer(rg, sm)
+
+    symbols_hat, no_eff = lmmse_equal([response_symbols, h_est, err_var, no])
+    return symbols_hat, no_eff
+
+
+def zf_equalizer(response_symbols, h_est, err_var):
+    sm = StreamManagement(rx_tx_association, num_streams_per_tx)
+    lmmse_equal = ZFEqualizer(rg, sm)
 
     symbols_hat, no_eff = lmmse_equal([response_symbols, h_est, err_var, no])
     return symbols_hat, no_eff

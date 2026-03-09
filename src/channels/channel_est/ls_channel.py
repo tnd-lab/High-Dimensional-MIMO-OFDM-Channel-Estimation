@@ -7,6 +7,7 @@ from sionna.ofdm import LMMSEInterpolator, LSChannelEstimator
 from src.channels.cdl_channel import no, sampling_channel_freq
 from src.ofdm.ofdm_resource_grids import rg
 from src.settings.config import (
+    batch_size,
     ebno_db,
     fft_size,
     num_bs_ant,
@@ -23,6 +24,8 @@ from src.settings.ml import number_of_samples
 class ChannelEstimator:
     def __init__(self, interpolation_factor: str = "nn", **kwargs):
         self.kwargs = kwargs
+        self.cdl = self.kwargs.get("cdl", None)
+        self.current_speed = self.kwargs.get("speed", speed)
         self.interpolation_factor = interpolation_factor
         self.estimator = self.initial_estimatetion_methods(interpolation_factor)
 
@@ -32,7 +35,7 @@ class ChannelEstimator:
         elif interpolation_factor.lower() == "nn":
             channel_estimator = LSChannelEstimator(rg, interpolation_type="nn")
         elif interpolation_factor.lower() == "lmmse":
-            cov_mat_dir = f"data/covariance_matrices/txant_{num_ut_ant}_rxant_{num_bs_ant}_speed_{speed}_samples_{number_of_samples}_ebno_{ebno_db}"
+            cov_mat_dir = f"data/covariance_matrices/txant_{num_ut_ant}_rxant_{num_bs_ant}_speed_{self.current_speed}_samples_{number_of_samples}_ebno_{ebno_db}"
 
             os.makedirs(cov_mat_dir, exist_ok=True)
 
@@ -91,69 +94,77 @@ class ChannelEstimator:
 
     @tf.function(jit_compile=True)
     def estimate_covariance_matrices(self, num_it):
-        num_rx_ant = num_bs_ant  # because Uplink so BS antennas viewed as RX antennas
-        num_tx_ant = num_ut_ant  # because Uplink so UT antennas viewed as TX antennas
-        num_time_steps = num_ofdm_symbols  # num_ofdm_symbols replaces num_time_steps
+        num_rx_ant = num_bs_ant
+        num_tx_ant = num_ut_ant
+        num_time_steps = num_ofdm_symbols
 
-        # Initialize covariance matrices compatible with LMMSEInterpolator
         freq_cov_mat = tf.zeros([fft_size, fft_size], tf.complex64)
-        time_cov_mat = tf.zeros(
-            [num_time_steps, num_time_steps], tf.complex64
-        )  # num_time_steps replaces num_ofdm_symbols
-        space_cov_mat = tf.zeros(
-            [num_rx_ant, num_rx_ant], tf.complex64
-        )  # RX antennas only for LMMSE
+        time_cov_mat = tf.zeros([num_time_steps, num_time_steps], tf.complex64)
+        space_cov_mat = tf.zeros([num_rx_ant, num_rx_ant], tf.complex64)
 
         for _ in tf.range(num_it):
-            # [batch_size, num_rx, num_rx_ant, num_tx, num_tx_ant, num_time_steps, fft_size] # noqa
-            h_samples = sampling_channel_freq()
+            if self.cdl:
+                h_samples = sampling_channel_freq(cdl=self.cdl)
+            else:
+                h_samples = sampling_channel_freq()
 
             #################################
             # Estimate frequency covariance
             #################################
-            # Move fft_size to front: [batch_size, num_rx, num_rx_ant, num_tx, num_tx_ant, fft_size, num_time_steps] # noqa
+            # Swap to: [batch_size, num_rx, num_rx_ant, num_tx, num_tx_ant, fft_size, num_time_steps]
             h_samples_freq = tf.transpose(h_samples, [0, 1, 2, 3, 4, 6, 5])
-            # [batch_size*num_rx*num_rx_ant*num_tx*num_tx_ant, fft_size, num_time_steps]
-            h_samples_freq = tf.reshape(h_samples_freq, [-1, fft_size, num_time_steps])
-            # [batch_size*num_rx*num_rx_ant*num_tx*num_tx_ant, fft_size, fft_size]
+            # [batch_size, num_rx, num_rx_ant, num_tx, num_tx_ant, fft_size, fft_size]
             freq_cov_mat_ = tf.matmul(h_samples_freq, h_samples_freq, adjoint_b=True)
-            # [fft_size, fft_size]
-            freq_cov_mat_ = tf.reduce_mean(freq_cov_mat_, axis=0)
+            # [fft_size, fft_size] - average over all other dimensions
+            freq_cov_mat_ = tf.reduce_mean(freq_cov_mat_, axis=(0, 1, 2, 3, 4))
             freq_cov_mat += freq_cov_mat_
 
             ################################
             # Estimate time covariance
             ################################
-            # [batch_size*num_rx*num_rx_ant*num_tx*num_tx_ant, num_time_steps, fft_size]
-            h_samples_time = tf.reshape(h_samples, [-1, num_time_steps, fft_size])
-            # [batch_size*num_rx*num_rx_ant*num_tx*num_tx_ant, num_time_steps, num_time_steps] # noqa
-            time_cov_mat_ = tf.matmul(h_samples_time, h_samples_time, adjoint_b=True)
-            # [num_time_steps, num_time_steps]
-            time_cov_mat_ = tf.reduce_mean(time_cov_mat_, axis=0)
+            # [batch_size, num_rx, num_rx_ant, num_tx, num_tx_ant, num_time_steps, num_time_steps]
+            time_cov_mat_ = tf.matmul(h_samples, h_samples, adjoint_b=True)
+            # [num_time_steps, num_time_steps] - average over all other dimensions
+            time_cov_mat_ = tf.reduce_mean(time_cov_mat_, axis=(0, 1, 2, 3, 4))
             time_cov_mat += time_cov_mat_
 
             ###############################
             # Estimate spatial covariance (RX only for LMMSE)
             ###############################
-            # Move num_rx_ant to front: [batch_size, num_rx, num_rx_ant, num_tx, num_tx_ant, num_time_steps, fft_size] # noqa
-            h_samples_space = tf.transpose(h_samples, [0, 1, 2, 3, 4, 5, 6])
-            # [batch_size*num_rx*num_tx*num_tx_ant*num_time_steps, num_rx_ant, fft_size]
-            h_samples_space = tf.reshape(h_samples_space, [-1, num_rx_ant, fft_size])
-            # [batch_size*num_rx*num_tx*num_tx_ant*num_time_steps, num_rx_ant, num_rx_ant] # noqa
+            # Swap to: [batch_size, num_rx, num_time_steps, num_tx, num_tx_ant, num_rx_ant, fft_size]
+            h_samples_space = tf.transpose(h_samples, [0, 1, 5, 3, 4, 2, 6])
+            # [batch_size, num_rx, num_time_steps, num_tx, num_tx_ant, num_rx_ant, num_rx_ant]
             space_cov_mat_ = tf.matmul(h_samples_space, h_samples_space, adjoint_b=True)
-            # [num_rx_ant, num_rx_ant]
-            space_cov_mat_ = tf.reduce_mean(space_cov_mat_, axis=0)
+            # [num_rx_ant, num_rx_ant] - average over all other dimensions
+            space_cov_mat_ = tf.reduce_mean(space_cov_mat_, axis=(0, 1, 2, 3, 4))
             space_cov_mat += space_cov_mat_
 
-        # Normalize
+        # Normalize by number of averaged elements (not samples!)
+        # freq_cov: we averaged over [batch, num_rx, num_rx_ant, num_tx, num_tx_ant, num_time_steps]
         num_elements_freq = (
-            num_time_steps * num_it * num_rx * num_rx_ant * num_tx * num_tx_ant
+            batch_size
+            * num_rx
+            * num_rx_ant
+            * num_tx
+            * num_tx_ant
+            * num_time_steps
+            * num_it
         )
+
+        # time_cov: we averaged over [batch, num_rx, num_rx_ant, num_tx, num_tx_ant, fft_size]
         num_elements_time = (
-            fft_size * num_it * num_rx * num_rx_ant * num_tx * num_tx_ant
+            batch_size * num_rx * num_rx_ant * num_tx * num_tx_ant * fft_size * num_it
         )
+
+        # space_cov: we averaged over [batch, num_rx, num_time_steps, num_tx, num_tx_ant, fft_size]
         num_elements_space = (
-            fft_size * num_time_steps * num_it * num_rx * num_tx * num_tx_ant
+            batch_size
+            * num_rx
+            * num_time_steps
+            * num_tx
+            * num_tx_ant
+            * fft_size
+            * num_it
         )
 
         freq_cov_mat /= tf.complex(tf.cast(num_elements_freq, tf.float32), 0.0)
@@ -201,7 +212,7 @@ if __name__ == "__main__":
     response_symbols = response_time_domain(modulated_qam_symbols, h_time)
     demodulated_symbols = ofdm_demodulation(response_symbols)
 
-    channel_estimator = ChannelEstimator(interpolation_factor="lmmse")
+    channel_estimator = ChannelEstimator(interpolation_factor="lmmse", order="t-f-s")
 
     h_est, err = channel_estimator.estimate(demodulated_symbols)
 

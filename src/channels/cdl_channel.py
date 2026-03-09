@@ -6,6 +6,7 @@ from sionna.channel import (
     cir_to_time_channel,
     subcarrier_frequencies,
     time_lag_discrete_time_channel,
+    time_to_ofdm_channel,
 )
 from sionna.channel.tr38901 import CDL
 from sionna.utils import ebnodb2no
@@ -125,6 +126,6 @@ if __name__ == "__main__":
         h_freq[0, 0, 0, 0, 0, 0], save_fig="./images/channel_freq_complex_values.png"
     )
     plot_channel_frequency_domain(
-        h_freq[0, 0, 0, 0, 0].numpy().real.T,
+        h_freq[0, 0, 0, 0, 0].numpy().real,
         save_fig="./images/channel_freq_domain.png",
     )
