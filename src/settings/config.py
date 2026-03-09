@@ -10,9 +10,11 @@ fft_size = num_subcarrier
 batch_size = 1
 num_guards = [5, 6]
 dc_null = True
+
 num_tx = 1
 num_rx = 1
-rx_tx_association = np.array([[1]])  # because 1 tx and 1 rx
+rx_tx_association = np.array([[1]])  # 1 tx and 1 rx
+
 pilots = [2, 11]
 cyclic_prefix_length = 6
 pilot_pattern = "kronecker"
@@ -50,6 +52,6 @@ cdl_model = "B"
 
 # UT speed [m/s]. BSs are always assumed to be fixed.
 # The direction of travel will chosen randomly within the x-y plane.
-speed = 0
+speed = 10
 
 ebno_db = 0

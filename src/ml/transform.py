@@ -22,7 +22,7 @@ class MinMaxScaler4D:
         self.device = torch.device(device)
         self.original_shape = None
         self.transformed_shape = None
-        self.shape_list = [8, 16, 32, 64, 128, 256, 512, 1024]
+        self.shape_list = [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
         self.min_val = None
         self.max_val = None
         self.residual = None  # Store residual for accurate recovery

@@ -4,13 +4,17 @@ from scipy import stats
 
 
 def l2_loss(fake, real):
+    return torch.norm(fake - real, p=2) ** 2
+
+
+def l2_loss_norm(fake, real):
     return torch.norm(fake - real, p=2)
 
 
 # Assuming the VAE loss function is defined as follows:
 def vae_loss(predicted_h_freqs, true_h_freqs, latent_vector, std_h, mu_h):
-    # L2 loss between predicted and true h
-    recon_loss = l2_loss(predicted_h_freqs, true_h_freqs)
+    # L2 loss norm between predicted and true h
+    recon_loss = l2_loss_norm(predicted_h_freqs, true_h_freqs)
 
     # KL divergence formula between two Gaussians
     var_l = latent_vector.var(axis=0)

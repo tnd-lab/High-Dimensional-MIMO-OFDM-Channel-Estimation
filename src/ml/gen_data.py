@@ -91,14 +91,16 @@ def get_pilot_matrix(response_matrix):
     return new_response_matrix
 
 
-def synthesys_training_data():
+def synthesys_training_data(h_freq=None):
+    if h_freq is None:
+        h_freq = sampling_channel_freq()
+
     binary_values = binary_sources(
         [batch_size, num_tx, num_streams_per_tx, number_of_bits]
     )
     encoded_binary_values = ldpc_encoder(binary_values)
     qam_symbols = qam_mapper(encoded_binary_values)
     mapped_qam_symbol = resource_grid_mapper(qam_symbols)
-    h_freq = sampling_channel_freq()
     response_matrix = response_freqency_domain(mapped_qam_symbol, h_freq)
 
     # remove guard bands and null subcarriers
@@ -108,12 +110,38 @@ def synthesys_training_data():
 
 
 if __name__ == "__main__":
-    src_dir = f"txant_{num_ut_ant}_rxant_{num_bs_ant}_speed_{speed}_samples_{number_of_samples}_ebno_{ebno_db}"
+    from src.channels.rt_channel import sampling_rt_channel_freq
+    from sionna.channel.tr38901 import CDL
+    from src.settings.antenna import bs_array, ut_array
+    from src.settings.config import (
+        carrier_frequency,
+        cdl_model,
+        delay_spread,
+        direction,
+        ebno_db,
+        num_ofdm_symbols,
+    )
+    import random
+
+    # src_dir = f"txant_{num_ut_ant}_rxant_{num_bs_ant}_speed_{speed}_samples_{number_of_samples}_ebno_{ebno_db}"
+    src_dir = f"txant_{num_ut_ant}_rxant_{num_bs_ant}_speed_samples_{number_of_samples}_ebno_{ebno_db}_no_scaled"
 
     h_freqs = []
     pilot_matrices = []
     for i in tqdm(range(number_of_samples)):
-        response_matrix, h_freq = synthesys_training_data()
+        # response_matrix, h_freq = synthesys_training_data(h_freq=sampling_rt_channel_freq())
+        current_cdl = CDL(
+            cdl_model,
+            delay_spread,
+            carrier_frequency,
+            ut_array,
+            bs_array,
+            direction,
+            min_speed=random.randint(0, 50),
+        )
+        response_matrix, h_freq = synthesys_training_data(
+            h_freq=sampling_channel_freq(cdl=current_cdl)
+        )
         h_freq = h_freq.numpy()
         pilot_matrix = get_pilot_matrix(response_matrix)
 

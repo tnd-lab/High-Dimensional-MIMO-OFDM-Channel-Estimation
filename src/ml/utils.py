@@ -227,6 +227,27 @@ def plot_generated_image(pilot_matrix, h_freq, h_freq_hat, save_path):
     plt.close()
 
 
+def plot_skewness_losses(train_s_losses, val_s_losses, save_path):
+    plt.figure()
+    plt.plot(train_s_losses, label="Train Skewness Loss")
+    plt.plot(val_s_losses, label="Val Skewness Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.legend()
+    plt.title("Skewness Loss")
+    save_dir = os.path.dirname(save_path)
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir, exist_ok=True)
+    plt.savefig(save_path)
+    plt.close()
+
+    # Save data as .npy files
+    np.save(
+        os.path.join(save_dir, "train_generator_losses.npy"), np.array(train_s_losses)
+    )
+    np.save(os.path.join(save_dir, "val_generator_losses.npy"), np.array(val_s_losses))
+
+
 def plot_generator_losses(train_g_losses, val_g_losses, save_path):
     plt.figure()
     plt.plot(train_g_losses, label="Train Generator Loss")
@@ -284,21 +305,6 @@ def plot_nmses(train_nmses, val_nmses, save_path):
     # Save data as .npy files
     np.save(os.path.join(save_dir, "train_nmses.npy"), np.array(train_nmses))
     np.save(os.path.join(save_dir, "val_nmses.npy"), np.array(val_nmses))
-
-
-def plot_skewness_func(skewness_scores, epochs, img_path):
-    # # Plot the loss curves
-    plt.figure(figsize=(10, 6))
-    plt.plot(epochs, skewness_scores, label="Target")
-    plt.xlabel("Epoch")
-    plt.ylabel("Skewness distances")
-    plt.title("Skewness Loss")
-    plt.legend()
-    if not os.path.exists(img_path):
-        os.makedirs(os.path.dirname(img_path), exist_ok=True)
-    plt.savefig(img_path)
-    plt.close()
-    # plt.show()
 
 
 def replicate_to_shape(matrix: np.ndarray, new_shape: tuple) -> np.ndarray:

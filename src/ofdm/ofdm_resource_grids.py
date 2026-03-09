@@ -1,5 +1,4 @@
-from sionna.ofdm import ResourceGrid, ResourceGridMapper
-
+from sionna.ofdm import ResourceGrid, ResourceGridMapper, RemoveNulledSubcarriers
 from src.data.binary_sources import binary_sources
 from src.data.qam_mapper import qam_mapper
 from src.ldpc.ldpc_encoder import ldpc_encoder
@@ -21,6 +20,7 @@ from src.settings.config import (
 )
 from src.utils.plots import plot_symbols
 
+
 rg = ResourceGrid(
     num_ofdm_symbols=num_ofdm_symbols,
     fft_size=num_subcarrier,
@@ -33,6 +33,8 @@ rg = ResourceGrid(
     pilot_pattern=pilot_pattern,
     pilot_ofdm_symbol_indices=pilots,
 )
+
+remove_nulls_subcarriers = RemoveNulledSubcarriers(rg)
 
 
 def resource_grid_mapper(symbols):
