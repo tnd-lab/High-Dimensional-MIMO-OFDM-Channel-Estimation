@@ -5,6 +5,20 @@ from src.channels.channel_est.ml_channel import VAE
 from src.settings.ml import device
 
 
+plt.rcParams.update(
+    {
+        "text.usetex": True,
+        "font.family": "serif",
+        "font.serif": ["Times New Roman"],
+        "axes.labelsize": 14,
+        "font.size": 12,
+        "legend.fontsize": 10,
+        "xtick.labelsize": 11,
+        "ytick.labelsize": 11,
+    }
+)
+
+
 def compute_flops(model, input_shape):
     model = model.to(device).eval()
     dummy_input = torch.randn(1, *input_shape).to(device)
@@ -95,5 +109,4 @@ ax1.grid(True, which="both", linestyle="--", linewidth=0.5)
 ax1.legend(handles=[l1, l2], fontsize=10, loc="upper left")
 
 plt.tight_layout()
-plt.savefig("vae_complexity.png", dpi=300)
 plt.show()

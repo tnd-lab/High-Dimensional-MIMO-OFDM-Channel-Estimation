@@ -52,6 +52,6 @@ cdl_model = "B"
 
 # UT speed [m/s]. BSs are always assumed to be fixed.
 # The direction of travel will chosen randomly within the x-y plane.
-speed = 10
+speed = 50
 
 ebno_db = 0
